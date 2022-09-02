@@ -1,2 +1,3 @@
 # Home-Garage-of-the-Future-2nd-year-Internet-of-Things-project-
 My Internet of Things 2nd year project incorperating both hardware and software elements
+For this project my hope is to demonstrate a model of what garages will look like in the future as well this it is an aspiration for what I hope my own home garage will look like in the future. Currently the technologies on display in this project are very much part of the luxury market as a large majority of lower middle-class families cannot afford the large upfront cost of an electric vehicle or solar panels. Given the current downward trend in the price of the technologies, I could see garages like this one becoming more and more common place. 
