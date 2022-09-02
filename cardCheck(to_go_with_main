@@ -1,0 +1,52 @@
+void cardCheck()
+{
+  if (flag != 1) {
+    // Look for New Cards and Select one
+    if ( ! mfrc522.PICC_IsNewCardPresent()) {
+      return;
+    }
+    else;
+    if ( ! mfrc522.PICC_ReadCardSerial()) {
+      return;
+    }
+    else;
+    //printing tag info
+    Serial.print("UID tag :");    
+    String content = "";
+    byte letter;
+    for (byte i = 0; i < mfrc522.uid.size; i++)
+    {
+      Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");       
+      Serial.print(mfrc522.uid.uidByte[i], HEX);
+      content.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
+      content.concat(String(mfrc522.uid.uidByte[i], HEX));
+    }
+    Serial.println();
+    content.toUpperCase();
+    //Checks for Correct Tag 
+    if (content.substring(1) == "C3 8A F5 96")
+    {
+      flag = 1;
+    }
+  }
+  //Opens and Closes Door if Flag is Equal to 1
+  if (flag == 1)      
+  {
+    do {
+      digitalWrite(pwm, HIGH);          //code to open door
+      digitalWrite(M_1, HIGH);
+      digitalWrite(M_2, LOW);
+    } while (digitalRead(TopSwt) != LOW);  //waits for top switch
+    digitalWrite(pwm, LOW);
+    delay(5000);                   //delays 10 seconds for car to enter garage
+    do {
+      digitalWrite(pwm, HIGH);            //code to close door
+      digitalWrite(M_1, LOW);
+      digitalWrite(M_2, HIGH);
+    } while (digitalRead(BotSwt) != LOW);  //waits for bottom switch
+    digitalWrite(pwm, LOW);
+    digitalWrite(rst, LOW);
+  }
+  else {};
+
+}
