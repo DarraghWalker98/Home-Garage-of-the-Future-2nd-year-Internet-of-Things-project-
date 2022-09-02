@@ -1,0 +1,236 @@
+/* File:Home Garage of the Future Final Code
+Date:30/04/2022
+Author:Darragh Walker
+Revision:Final
+*/
+#include <SPI.h>
+#include <MFRC522.h>
+#include "WiFiEsp.h"
+#include <RH_ASK.h>
+
+//Setting RX on mega for 433Mhz receiver to pin 17
+RH_ASK rf_driver(2000, 17, 12, 0);          
+#ifndef HAVE_HWSERIAL1
+#include "SoftwareSerial.h"
+SoftwareSerial Serial1(6, 7); // RX, TX   
+
+#endif
+//Setting up pinouts for board
+#define  SS_PIN  53  
+#define  RST_PIN  5
+#define pwm  22      
+#define TopSwt  39
+#define BotSwt 37
+#define M_1 24
+#define M_2 26
+#define rst 10
+
+//Instance of RC522
+MFRC522 mfrc522(SS_PIN, RST_PIN);  
+
+//Network setup and global variables
+char ssid[] = "Pixel";              
+char pass[] = "";
+int status = WL_IDLE_STATUS;
+int reqCount = 0;               
+RingBuffer buf1(8);
+uint8_t flag = 0;
+float cvoltage;
+
+//Setting WebServer to Port 80 & Including functions 
+WiFiEspServer server(80);
+void cardCheck();           
+void printWifiStatus();
+
+
+void setup() {
+  //Initializing Serial
+  Serial.begin(115200);     
+  Serial1.begin(9600);   
+    
+  //Initializing RF Driver, SPI, Wifi & MFRC522
+  rf_driver.init();
+  WiFi.init(&Serial1);
+  SPI.begin();      
+  mfrc522.PCD_Init(); 
+    
+  //Pinmodes
+  pinMode(pwm, OUTPUT);   
+  pinMode(M_1, OUTPUT);
+  pinMode(M_2, OUTPUT);
+  digitalWrite(rst, HIGH);
+  pinMode (rst, OUTPUT);
+  pinMode (BotSwt, INPUT_PULLUP); 
+  pinMode (TopSwt, INPUT_PULLUP);
+  
+  //Begin Wifi
+  while ( status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to WPA SSID: ");   
+    Serial.println(ssid);
+    status = WiFi.begin(ssid, pass);
+  }
+  //Network Details
+  Serial.println("You're connected to the network");    
+  printWifiStatus();
+  
+  //Start server on port 80
+  server.begin();
+}
+
+void loop() {
+  //Local Variables With Some Values Applied
+  uint8_t buf[11];
+  uint8_t buflen = sizeof(buf);
+  int sensorValue = analogRead(A0);     
+  float hvoltage = ((sensorValue * (5.0 / 1023.0)) * 2);   
+  
+  //Checks for message recieved
+  if (rf_driver.recv(buf, &buflen)) {
+    cvoltage = buf[0];
+  }
+  cardCheck();    
+         
+  // listen for incoming client
+  WiFiEspClient client = server.available();
+  if (client) {
+    Serial.println("New client");     
+    buf1.init();
+    
+    //Checks For Blank Line
+    boolean currentLineIsBlank = true;   
+     
+    //Once Client is Connected Begin Sending Data to Server
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        buf1.push(c);
+        if (c == '\n' && currentLineIsBlank) {
+          Serial.println("Sending response");
+          //Server Specific Information
+          client.print(
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html\r\n"
+            "Connection: close\r\n"
+            "Refresh:60\r\n"
+            "\r\n");
+          //Raw HTML Code Passed to ESP-01 Inluding CSS Web Styling
+          client.println(F(R"rawliteral(
+           <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Test</title>
+                <style>
+                    body {
+                        background-color: lightblue;
+                    }
+            
+                    h1 {
+                        color: white;
+                        text-align: center;
+                    }
+            
+                    h2 {
+                        font-family: verdana;
+                        font-size: 20px;
+                        text-align: center;
+                    }
+            
+                    .img-bat {
+                        width: 300px;
+                        display: block;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+            
+                    .btn {
+                        border: none;
+                        color: white;
+                        padding: 14px 28px;
+                        font-size: 16px;
+                        cursor: pointer;
+                        display: block;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+            
+                    .OpenDoor {
+                        background-color: #ff9800;
+                    }
+                        /* Red */
+                        .OpenDoor:hover {
+                            background: #e68a00;
+                        }
+                </style>
+           </head>
+          <body>
+          
+              <h1>Your Devices</h1>
+              <h2>
+                  House Battery
+              </h2>
+          )rawliteral"));
+          
+          //Logic to Decide What Battery png is Displayed Based on Current Charge Level of Car and Garage
+          if (hvoltage > 4.3) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/r6wBfYN/Batt100.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (hvoltage <= 4.3 && hvoltage > 4.15) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/GckvmwR/Batt75.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (hvoltage <= 4.15 && hvoltage > 4.0) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/b63HzFf/Batt50.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (hvoltage <= 3.85 && hvoltage > 3.7) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/F5TFGXk/Batt25.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (hvoltage <= 3.7) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/SvxdQc6/Batt0.png" alt="Full Battery" />)rawliteral"));
+          }
+
+          client.print("<h2>Car Battery</h2>\r\n");
+          if (cvoltage > 4.5) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/r6wBfYN/Batt100.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (cvoltage <= 4.5 && cvoltage > 4.3) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/GckvmwR/Batt75.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (cvoltage <= 4.3 && cvoltage > 4.1) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/b63HzFf/Batt50.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (cvoltage <= 4.1 && cvoltage > 3.9) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/F5TFGXk/Batt25.png" alt="Full Battery" />)rawliteral"));
+          }
+          else if (cvoltage <= 3.9) {
+            client.println(F(R"rawliteral(<img class="img-bat" src="https://i.ibb.co/SvxdQc6/Batt0.png" alt="Full Battery" />)rawliteral"));
+          }
+          client.println(F(R"rawliteral(
+          <br />
+            <input type=button  class="OpenDoor btn" value=OPEN onmousedown=location.href="/H">
+          <br />
+             
+           </body>
+          </html>
+          )rawliteral"));
+          break;
+        }
+        //Sets Bool Value For Blank Line Check
+        if (c == '\n') {
+          currentLineIsBlank = true;      
+        }
+        else if (c != '\r') {
+          currentLineIsBlank = false;
+        }
+        if (buf1.endsWith("GET /H")) {
+          flag = 1;
+        }
+      }
+    }
+    //Client is Disconnected
+    delay(10);
+    client.stop();
+    Serial.println("Client disconnected");      
+  }
+  //calls card check function at end of code 
+  cardCheck();          
+}
